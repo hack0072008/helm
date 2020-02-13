@@ -165,22 +165,6 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			existObject = eo
 		}
 
-		originalInfo := original.Get(info)
-		if originalInfo == nil {
-			kind := info.Mapping.GroupVersionKind.Kind
-			c.Log("no %s with the name %q found, use reource in cluster", kind, info.Name)
-			originalInfo = &resource.Info{
-				Object: existObject,
-			}
-		}
-
-		// can be removed maybe
-		if originalInfo.Object == nil {
-			kind := info.Mapping.GroupVersionKind.Kind
-			c.Log("cannot found origin object %s %s", kind, info.Name)
-			return errors.Errorf("no %s with the name %q found", kind, info.Name)
-		}
-
 		flag := force
 
 		if info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition" {
@@ -189,6 +173,16 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 
 		if info.Mapping.GroupVersionKind.Kind != "Service" {
 			flag = false
+		}
+
+		originalInfo := original.Get(info)
+		if originalInfo == nil {
+			kind := info.Mapping.GroupVersionKind.Kind
+			c.Log("no %s with the name %q found, use reource in cluster", kind, info.Name)
+			originalInfo = &resource.Info{
+				Object: existObject,
+			}
+			flag = true
 		}
 
 		if err := updateResource(c, info, originalInfo.Object, flag); err != nil {
