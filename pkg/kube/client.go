@@ -21,17 +21,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/evanphx/json-patch"
 	"github.com/pkg/errors"
 	batch "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apiextv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	//"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -144,7 +144,9 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 		}
 
 		helper := resource.NewHelper(info.Client, info.Mapping)
-		if _, err := helper.Get(info.Namespace, info.Name, info.Export); err != nil {
+		var existObject runtime.Object
+		if eo, err := helper.Get(info.Namespace, info.Name, info.Export); err != nil {
+			existObject = eo
 			if !apierrors.IsNotFound(err) {
 				return errors.Wrap(err, "could not get information about the resource")
 			}
@@ -165,10 +167,13 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 		originalInfo := original.Get(info)
 		if originalInfo == nil {
 			kind := info.Mapping.GroupVersionKind.Kind
-			return errors.Errorf("no %s with the name %q found", kind, info.Name)
+			c.Log("no %s with the name %q found, use reource in cluster", kind, info.Name)
+			originalInfo = &resource.Info{
+				Object: existObject,
+			}
 		}
 
-		if err := updateResource(c, info, originalInfo.Object, force); err != nil {
+		if err := updateResource(c, info, originalInfo.Object, info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition"); err != nil {
 			c.Log("error updating the resource %q:\n\t %v", info.Name, err)
 			updateErrors = append(updateErrors, err.Error())
 		}
@@ -320,7 +325,12 @@ func createPatch(target *resource.Info, current runtime.Object) ([]byte, types.P
 	// returned from ConvertToVersion. Anything that's unstructured should
 	// use the jsonpatch.CreateMergePatch. Strategic Merge Patch is not supported
 	// on objects like CRDs.
-	if _, ok := versionedObject.(runtime.Unstructured); ok {
+	_, isUnstructured := versionedObject.(runtime.Unstructured)
+
+	// On newer K8s versions, CRDs aren't unstructured but has this dedicated type
+	_, isCRD := versionedObject.(*apiextv1beta1.CustomResourceDefinition)
+
+	if isUnstructured || isCRD {
 		// fall back to generic JSON merge patch
 		patch, err := jsonpatch.CreateMergePatch(oldData, newData)
 		return patch, types.MergePatchType, err
@@ -336,52 +346,43 @@ func createPatch(target *resource.Info, current runtime.Object) ([]byte, types.P
 }
 
 func updateResource(c *Client, target *resource.Info, currentObj runtime.Object, force bool) error {
+	var (
+		obj    runtime.Object
+		helper = resource.NewHelper(target.Client, target.Mapping)
+		kind   = target.Mapping.GroupVersionKind.Kind
+	)
+
 	patch, patchType, err := createPatch(target, currentObj)
 	if err != nil {
 		return errors.Wrap(err, "failed to create patch")
 	}
-	if patch == nil {
+
+	if patch == nil || string(patch) == "{}" {
 		c.Log("Looks like there are no changes for %s %q", target.Mapping.GroupVersionKind.Kind, target.Name)
 		// This needs to happen to make sure that tiller has the latest info from the API
 		// Otherwise there will be no labels and other functions that use labels will panic
 		if err := target.Get(); err != nil {
-			return errors.Wrap(err, "error trying to refresh resource information")
+			return errors.Wrap(err, "failed to refresh resource information")
 		}
+		return nil
+	}
+
+	// if --force is applied, attempt to replace the existing resource with the new object.
+	if force {
+		obj, err = helper.Replace(target.Namespace, target.Name, true, target.Object)
+		if err != nil {
+			return errors.Wrap(err, "failed to replace object")
+		}
+		c.Log("Replaced %q with kind %s for kind %s\n", target.Name, currentObj.GetObjectKind().GroupVersionKind().Kind, kind)
 	} else {
 		// send patch to server
-		helper := resource.NewHelper(target.Client, target.Mapping)
-
-		obj, err := helper.Patch(target.Namespace, target.Name, patchType, patch, nil)
+		obj, err = helper.Patch(target.Namespace, target.Name, patchType, patch, nil)
 		if err != nil {
-			kind := target.Mapping.GroupVersionKind.Kind
-			log.Printf("Cannot patch %s: %q (%v)", kind, target.Name, err)
-
-			if force {
-				// Attempt to delete...
-				if err := deleteResource(target); err != nil {
-					return err
-				}
-				log.Printf("Deleted %s: %q", kind, target.Name)
-
-				// ... and recreate
-				if err := createResource(target); err != nil {
-					return errors.Wrap(err, "failed to recreate resource")
-				}
-				log.Printf("Created a new %s called %q\n", kind, target.Name)
-
-				// No need to refresh the target, as we recreated the resource based
-				// on it. In addition, it might not exist yet and a call to `Refresh`
-				// may fail.
-			} else {
-				log.Print("Use --force to force recreation of the resource")
-				return err
-			}
-		} else {
-			// When patch succeeds without needing to recreate, refresh target.
-			target.Refresh(obj, true)
+			return errors.Wrapf(err, "cannot patch %q with kind %s", target.Name, kind)
 		}
 	}
 
+	target.Refresh(obj, true)
 	return nil
 }
 

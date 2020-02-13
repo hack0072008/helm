@@ -215,10 +215,7 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 	// Mark this release as in-progress
 	rel.SetStatus(release.StatusPendingInstall, "Initial install underway")
 
-	resources, err := i.cfg.KubeClient.Build(bytes.NewBufferString(rel.Manifest))
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to build kubernetes objects from release manifest")
-	}
+
 
 	// Bail out here if it is a dry run
 	if i.DryRun {
@@ -244,10 +241,23 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 
 	// pre-install hooks
 	if !i.DisableHooks {
+
+		if err := i.cfg.execHook(rel, release.HookCRDInstall, i.Timeout); err != nil {
+			return i.failRelease(rel, fmt.Errorf("failed crd-install: %s", err))
+		}
+
 		if err := i.cfg.execHook(rel, release.HookPreInstall, i.Timeout); err != nil {
 			return i.failRelease(rel, fmt.Errorf("failed pre-install: %s", err))
 		}
 	}
+
+	// this was moved after hook
+	resources, err := i.cfg.KubeClient.Build(bytes.NewBufferString(rel.Manifest))
+	if err != nil {
+		// return nil, errors.Wrap(err, "unable to build kubernetes objects from release manifest")
+		return i.failRelease(rel, fmt.Errorf("unable to build kubernetes objects from release manifest: %s", err))
+	}
+
 
 	// At this point, we can do the install. Note that before we were detecting whether to
 	// do an update, but it's not clear whether we WANT to do an update if the re-use is set
@@ -329,7 +339,7 @@ func (i *Install) availableName() error {
 	releaseutil.Reverse(h, releaseutil.SortByRevision)
 	rel := h[0]
 
-	if st := rel.Info.Status; i.Replace && (st == release.StatusUninstalled || st == release.StatusFailed) {
+	if st := rel.Info.Status; i.Replace && (st == release.StatusUninstalled || st == release.StatusFailed || st == release.StatusSuperseded ) {
 		return nil
 	}
 	return errors.New("cannot re-use a name that is still in use")
