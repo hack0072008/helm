@@ -146,7 +146,6 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 		helper := resource.NewHelper(info.Client, info.Mapping)
 		var existObject runtime.Object
 		if eo, err := helper.Get(info.Namespace, info.Name, info.Export); err != nil {
-			existObject = eo
 			if !apierrors.IsNotFound(err) {
 				return errors.Wrap(err, "could not get information about the resource")
 			}
@@ -162,6 +161,8 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			kind := info.Mapping.GroupVersionKind.Kind
 			c.Log("Created a new %s called %q\n", kind, info.Name)
 			return nil
+		} else {
+			existObject = eo
 		}
 
 		originalInfo := original.Get(info)
@@ -173,7 +174,24 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			}
 		}
 
-		if err := updateResource(c, info, originalInfo.Object, info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition"); err != nil {
+		// can be removed maybe
+		if originalInfo.Object == nil {
+			kind := info.Mapping.GroupVersionKind.Kind
+			c.Log("cannot found origin object %s %s", kind, info.Name)
+			return errors.Errorf("no %s with the name %q found", kind, info.Name)
+		}
+
+		flag := force
+
+		if info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition" {
+			flag = false
+		}
+
+		if info.Mapping.GroupVersionKind.Kind != "Service" {
+			flag = false
+		}
+
+		if err := updateResource(c, info, originalInfo.Object, flag); err != nil {
 			c.Log("error updating the resource %q:\n\t %v", info.Name, err)
 			updateErrors = append(updateErrors, err.Error())
 		}
