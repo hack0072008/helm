@@ -188,6 +188,10 @@ func (u *Upgrade) prepareUpgrade(name string, chart *chart.Chart, vals map[strin
 		upgradedRelease.Info.Notes = notesTxt
 	}
 	err = validateManifest(u.cfg.KubeClient, manifestDoc.Bytes())
+	if err != nil {
+		u.cfg.Log("validate error, ignore for now: %s", err.Error())
+		err = nil
+	}
 	return currentRelease, upgradedRelease, err
 }
 
