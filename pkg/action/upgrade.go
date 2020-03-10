@@ -198,6 +198,13 @@ func (u *Upgrade) performUpgrade(originalRelease, upgradedRelease *release.Relea
 		return upgradedRelease, nil
 	}
 
+	if !u.DisableHooks {
+		if err := u.cfg.execHook(upgradedRelease, release.HookCRDInstall, u.Timeout); err != nil {
+			return u.failRelease(upgradedRelease, fmt.Errorf("crd-install hooks failed: %s", err))
+		}
+		u.cfg.Log("crd-install hook succeed.")
+	}
+
 	current, err := u.cfg.KubeClient.Build(bytes.NewBufferString(originalRelease.Manifest))
 	if err != nil {
 		return upgradedRelease, errors.Wrap(err, "unable to build kubernetes objects from current release manifest")
@@ -212,10 +219,6 @@ func (u *Upgrade) performUpgrade(originalRelease, upgradedRelease *release.Relea
 		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.Timeout); err != nil {
 			return u.failRelease(upgradedRelease, fmt.Errorf("pre-upgrade hooks failed: %s", err))
 		}
-		if err := u.cfg.execHook(upgradedRelease, release.HookCRDInstall, u.Timeout); err != nil {
-			return u.failRelease(upgradedRelease, fmt.Errorf("crd-install hooks failed: %s", err))
-		}
-		u.cfg.Log("crd-install hook succeed.")
 	} else {
 		u.cfg.Log("upgrade hooks disabled for %s", upgradedRelease.Name)
 	}
