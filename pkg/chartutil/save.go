@@ -94,7 +94,7 @@ func Save(c *chart.Chart, outDir string) (string, error) {
 	filename = filepath.Join(outDir, filename)
 	if stat, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(filename), 0755); !os.IsExist(err) {
-			return "", err
+			return "fuck-not-exist", err
 		}
 	} else if !stat.IsDir() {
 		return "", errors.Errorf("is not a directory: %s", filepath.Dir(filename))
