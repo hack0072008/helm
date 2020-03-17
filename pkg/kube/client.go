@@ -169,7 +169,7 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			if original.Get(info) == nil {
 				c.Log("found resource exist in cluster but not in previous release: %s", info.Name)
 				if info.Mapping.GroupVersionKind.Kind == "Service" {
-					c.Log("found legacy Service exist in cluster, delete it: %", info.Name)
+					c.Log("found legacy Service exist in cluster, delete it: %s", info.Name)
 					if _, err := helper.Delete(info.Namespace, info.Name); err != nil {
 						c.Log("delete old service error: %s", err.Error())
 					} else {
@@ -203,6 +203,10 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 				Object: existObject,
 			}
 			flag = true
+		}
+
+		if info.Mapping.GroupVersionKind.Kind == "Job" {
+			flag = false
 		}
 
 		if err := updateResource(c, info, originalInfo.Object, flag); err != nil {
