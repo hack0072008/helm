@@ -171,10 +171,6 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			flag = false
 		}
 
-		if info.Mapping.GroupVersionKind.Kind != "Service" {
-			flag = false
-		}
-
 		originalInfo := original.Get(info)
 		if originalInfo == nil {
 			kind := info.Mapping.GroupVersionKind.Kind
@@ -183,6 +179,10 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 				Object: existObject,
 			}
 			flag = true
+		}
+
+		if info.Mapping.GroupVersionKind.Kind == "Service" {
+			flag = false
 		}
 
 		if err := updateResource(c, info, originalInfo.Object, flag); err != nil {
