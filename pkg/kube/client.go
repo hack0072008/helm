@@ -168,10 +168,11 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			// can delete it first. then create it. This is intent to avoid the patch/replace error
 			if original.Get(info) == nil {
 				c.Log("found resource exist in cluster but not in previous release: %s", info.Name)
-				if info.Mapping.GroupVersionKind.Kind == "Service" {
-					c.Log("found legacy Service exist in cluster, delete it: %s", info.Name)
+				kind := info.Mapping.GroupVersionKind.Kind
+				if kind == "Service" || kind == "Job" {
+					c.Log("found legacy resource exist in cluster, delete it: %s", info.Name)
 					if _, err := helper.Delete(info.Namespace, info.Name); err != nil {
-						c.Log("delete old service error: %s", err.Error())
+						c.Log("delete old resource error: %s", err.Error())
 					} else {
 						// this part should be the same as above
 						if err := createResource(info); err != nil {
