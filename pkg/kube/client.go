@@ -171,7 +171,13 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			if original.Get(info) == nil {
 				c.Log("found resource exist in cluster but not in previous release: %s %s", kind, info.Name)
 				kind = info.Mapping.GroupVersionKind.Kind
-				if kind == "Service" || kind == "Job" || kind == "PersistentVolumeClaim" {
+
+				if kind == "PersistentVolumeClaim" {
+					c.Log("found legacy pvc, consider it synced, skip processing")
+					return nil
+				}
+
+				if kind == "Service" || kind == "Job" {
 					c.Log("found legacy resource exist in cluster, delete it: %s %s", kind, info.Name)
 					if _, err := helper.Delete(info.Namespace, info.Name); err != nil {
 						c.Log("delete old resource error: %s", err.Error())
