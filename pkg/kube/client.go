@@ -143,6 +143,8 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			return err
 		}
 
+		kind := info.Mapping.GroupVersionKind.Kind
+
 		helper := resource.NewHelper(info.Client, info.Mapping)
 		var existObject runtime.Object
 		if eo, err := helper.Get(info.Namespace, info.Name, info.Export); err != nil {
@@ -158,7 +160,7 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			// Append the created resource to the results
 			res.Created = append(res.Created, info)
 
-			kind := info.Mapping.GroupVersionKind.Kind
+			kind = info.Mapping.GroupVersionKind.Kind
 			c.Log("Created a new %s called %q\n", kind, info.Name)
 			return nil
 		} else {
@@ -167,10 +169,10 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			// if exist in cluster, but not in origin. If this is a Service(or PVC in the feature), we
 			// can delete it first. then create it. This is intent to avoid the patch/replace error
 			if original.Get(info) == nil {
-				c.Log("found resource exist in cluster but not in previous release: %s", info.Name)
-				kind := info.Mapping.GroupVersionKind.Kind
-				if kind == "Service" || kind == "Job" {
-					c.Log("found legacy resource exist in cluster, delete it: %s", info.Name)
+				c.Log("found resource exist in cluster but not in previous release: %s %s", kind, info.Name)
+				kind = info.Mapping.GroupVersionKind.Kind
+				if kind == "Service" || kind == "Job" || kind == "PersistentVolumeClaim" {
+					c.Log("found legacy resource exist in cluster, delete it: %s %s", kind, info.Name)
 					if _, err := helper.Delete(info.Namespace, info.Name); err != nil {
 						c.Log("delete old resource error: %s", err.Error())
 					} else {
@@ -181,7 +183,7 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 						// Append the created resource to the results
 						res.Created = append(res.Created, info)
 
-						kind := info.Mapping.GroupVersionKind.Kind
+						kind = info.Mapping.GroupVersionKind.Kind
 						c.Log("Created a new %s called %q\n", kind, info.Name)
 						return nil
 					}
