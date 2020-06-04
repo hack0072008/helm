@@ -146,7 +146,6 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 		helper := resource.NewHelper(info.Client, info.Mapping)
 		var existObject runtime.Object
 		if eo, err := helper.Get(info.Namespace, info.Name, info.Export); err != nil {
-			existObject = eo
 			if !apierrors.IsNotFound(err) {
 				return errors.Wrap(err, "could not get information about the resource")
 			}
@@ -162,6 +161,39 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			kind := info.Mapping.GroupVersionKind.Kind
 			c.Log("Created a new %s called %q\n", kind, info.Name)
 			return nil
+		} else {
+			existObject = eo
+
+			// if exist in cluster, but not in origin. If this is a Service(or PVC in the feature), we
+			// can delete it first. then create it. This is intent to avoid the patch/replace error
+			if original.Get(info) == nil {
+				c.Log("found resource exist in cluster but not in previous release: %s", info.Name)
+				kind := info.Mapping.GroupVersionKind.Kind
+				if kind == "Service" || kind == "Job" {
+					c.Log("found legacy resource exist in cluster, delete it: %s", info.Name)
+					if _, err := helper.Delete(info.Namespace, info.Name); err != nil {
+						c.Log("delete old resource error: %s", err.Error())
+					} else {
+						// this part should be the same as above
+						if err := createResource(info); err != nil {
+							return errors.Wrap(err, "failed to create resource")
+						}
+						// Append the created resource to the results
+						res.Created = append(res.Created, info)
+
+						kind := info.Mapping.GroupVersionKind.Kind
+						c.Log("Created a new %s called %q\n", kind, info.Name)
+						return nil
+					}
+
+				}
+			}
+		}
+
+		flag := force
+
+		if info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition" {
+			flag = false
 		}
 
 		originalInfo := original.Get(info)
@@ -171,9 +203,14 @@ func (c *Client) Update(original, target ResourceList, force bool) (*Result, err
 			originalInfo = &resource.Info{
 				Object: existObject,
 			}
+			flag = true
 		}
 
-		if err := updateResource(c, info, originalInfo.Object, info.Mapping.GroupVersionKind.Kind != "CustomResourceDefinition"); err != nil {
+		if info.Mapping.GroupVersionKind.Kind == "Job" {
+			flag = false
+		}
+
+		if err := updateResource(c, info, originalInfo.Object, flag); err != nil {
 			c.Log("error updating the resource %q:\n\t %v", info.Name, err)
 			updateErrors = append(updateErrors, err.Error())
 		}

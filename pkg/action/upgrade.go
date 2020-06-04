@@ -188,6 +188,10 @@ func (u *Upgrade) prepareUpgrade(name string, chart *chart.Chart, vals map[strin
 		upgradedRelease.Info.Notes = notesTxt
 	}
 	err = validateManifest(u.cfg.KubeClient, manifestDoc.Bytes())
+	if err != nil {
+		u.cfg.Log("validate error, ignore for now: %s", err.Error())
+		err = nil
+	}
 	return currentRelease, upgradedRelease, err
 }
 
@@ -196,6 +200,13 @@ func (u *Upgrade) performUpgrade(originalRelease, upgradedRelease *release.Relea
 		u.cfg.Log("dry run for %s", upgradedRelease.Name)
 		upgradedRelease.Info.Description = "Dry run complete"
 		return upgradedRelease, nil
+	}
+
+	if !u.DisableHooks {
+		if err := u.cfg.execHook(upgradedRelease, release.HookCRDInstall, u.Timeout); err != nil {
+			return u.failRelease(upgradedRelease, fmt.Errorf("crd-install hooks failed: %s", err))
+		}
+		u.cfg.Log("crd-install hook succeed.")
 	}
 
 	current, err := u.cfg.KubeClient.Build(bytes.NewBufferString(originalRelease.Manifest))
@@ -212,10 +223,6 @@ func (u *Upgrade) performUpgrade(originalRelease, upgradedRelease *release.Relea
 		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.Timeout); err != nil {
 			return u.failRelease(upgradedRelease, fmt.Errorf("pre-upgrade hooks failed: %s", err))
 		}
-		if err := u.cfg.execHook(upgradedRelease, release.HookCRDInstall, u.Timeout); err != nil {
-			return u.failRelease(upgradedRelease, fmt.Errorf("crd-install hooks failed: %s", err))
-		}
-		u.cfg.Log("crd-install hook succeed.")
 	} else {
 		u.cfg.Log("upgrade hooks disabled for %s", upgradedRelease.Name)
 	}
