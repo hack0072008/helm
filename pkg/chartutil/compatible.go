@@ -16,15 +16,24 @@ limitations under the License.
 
 package chartutil
 
-import "github.com/Masterminds/semver"
+import (
+	"github.com/Masterminds/semver"
+	"regexp"
+)
 
 // IsCompatibleRange compares a version to a constraint.
 // It returns true if the version matches the constraint, and false in all other cases.
 func IsCompatibleRange(constraint, ver string) bool {
-	sv, err := semver.NewVersion(ver)
+	// ALAUDA-FIX: support eks version
+	r, _ := regexp.Compile(`v[\d]\.[\d]*\.[\d]*`)
+	nv := r.FindString(ver)
+
+	sv, err := semver.NewVersion(nv)
 	if err != nil {
 		return false
 	}
+
+
 
 	c, err := semver.NewConstraint(constraint)
 	if err != nil {
