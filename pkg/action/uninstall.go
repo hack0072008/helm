@@ -111,6 +111,9 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 	}
 
 	kept, errs := u.deleteRelease(rel)
+	if len(errs) > 0 {
+		return nil, errors.Errorf("uninstall comes with %d error(s): %s", len(errs), joinErrors(errs))
+	}
 
 	if kept != "" {
 		kept = "These resources were kept due to the resource policy:\n" + kept
