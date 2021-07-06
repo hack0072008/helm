@@ -39,6 +39,9 @@ type Uninstall struct {
 	KeepHistory  bool
 	Timeout      time.Duration
 	Description  string
+
+	// KeepResources indicate to keep resources in k8s cluster when uninstall
+	KeepResources bool
 }
 
 // NewUninstall creates a new Uninstall object with the given configuration.
@@ -110,9 +113,15 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 		u.cfg.Log("uninstall: Failed to store updated release: %s", err)
 	}
 
-	kept, errs := u.deleteRelease(rel)
-	if len(errs) > 0 {
-		return nil, errors.Errorf("uninstall comes with %d error(s): %s", len(errs), joinErrors(errs))
+	var kept string
+	var errs []error
+	if u.KeepResources {
+		kept = rel.Manifest
+	} else {
+		kept, errs = u.deleteRelease(rel)
+		if len(errs) > 0 {
+			return nil, errors.Errorf("uninstall comes with %d error(s): %s", len(errs), joinErrors(errs))
+		}
 	}
 
 	if kept != "" {
