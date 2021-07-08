@@ -187,6 +187,7 @@ func (c *ChartDownloader) ResolveChartVersion(ref, version string) (*url.URL, er
 			c.Options = append(
 				c.Options,
 				getter.WithBasicAuth(rc.Username, rc.Password),
+				getter.WithPassCredentialsAll(rc.PassCredentialsAll),
 			)
 		}
 		return u, nil
@@ -211,7 +212,7 @@ func (c *ChartDownloader) ResolveChartVersion(ref, version string) (*url.URL, er
 		return u, err
 	}
 	if r != nil && r.Config != nil && r.Config.Username != "" && r.Config.Password != "" {
-		c.Options = append(c.Options, getter.WithBasicAuth(r.Config.Username, r.Config.Password))
+		c.Options = append(c.Options, getter.WithBasicAuth(r.Config.Username, r.Config.Password), getter.WithPassCredentialsAll(r.Config.PassCredentialsAll))
 	}
 
 	// Next, we need to load the index, and actually look up the chart.
@@ -252,7 +253,7 @@ func (c *ChartDownloader) ResolveChartVersion(ref, version string) (*url.URL, er
 			return repoURL, err
 		}
 		if r != nil && r.Config != nil && r.Config.Username != "" && r.Config.Password != "" {
-			c.Options = append(c.Options, getter.WithBasicAuth(r.Config.Username, r.Config.Password))
+			c.Options = append(c.Options, getter.WithBasicAuth(r.Config.Username, r.Config.Password), getter.WithPassCredentialsAll(r.Config.PassCredentialsAll))
 		}
 		return u, err
 	}

@@ -44,6 +44,8 @@ type repoAddOptions struct {
 
 	repoFile  string
 	repoCache string
+
+	passCredentialsAll bool
 }
 
 func newRepoAddCmd(out io.Writer) *cobra.Command {
@@ -70,6 +72,7 @@ func newRepoAddCmd(out io.Writer) *cobra.Command {
 	f.StringVar(&o.certFile, "cert-file", "", "identify HTTPS client using this SSL certificate file")
 	f.StringVar(&o.keyFile, "key-file", "", "identify HTTPS client using this SSL key file")
 	f.StringVar(&o.caFile, "ca-file", "", "verify certificates of HTTPS-enabled servers using this CA bundle")
+	f.BoolVar(&o.passCredentialsAll, "pass-credentials", false, "pass credentials to all domains")
 
 	return cmd
 }
@@ -97,6 +100,8 @@ func (o *repoAddOptions) run(out io.Writer) error {
 		CertFile: o.certFile,
 		KeyFile:  o.keyFile,
 		CAFile:   o.caFile,
+
+		PassCredentialsAll: o.passCredentialsAll,
 	}
 
 	r, err := repo.NewChartRepository(&c, getter.All(settings))

@@ -35,6 +35,8 @@ type options struct {
 	username  string
 	password  string
 	userAgent string
+
+	passCredentialsAll bool
 }
 
 // Option allows specifying various settings configurable by the user for overriding the defaults
@@ -54,6 +56,12 @@ func WithBasicAuth(username, password string) Option {
 	return func(opts *options) {
 		opts.username = username
 		opts.password = password
+	}
+}
+
+func WithPassCredentialsAll(pass bool) Option {
+	return func(opts *options) {
+		opts.passCredentialsAll = pass
 	}
 }
 
