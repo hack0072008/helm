@@ -63,6 +63,7 @@ func (p *Pull) Run(chartRef string) (string, error) {
 		Getters: getter.All(p.Settings),
 		Options: []getter.Option{
 			getter.WithBasicAuth(p.Username, p.Password),
+			getter.WithPassCredentialsAll(p.PassCredentialsAll),
 		},
 		RepositoryConfig: p.Settings.RepositoryConfig,
 		RepositoryCache:  p.Settings.RepositoryCache,
@@ -87,7 +88,8 @@ func (p *Pull) Run(chartRef string) (string, error) {
 	}
 
 	if p.RepoURL != "" {
-		chartURL, err := repo.FindChartInAuthRepoURL(p.RepoURL, p.Username, p.Password, chartRef, p.Version, p.CertFile, p.KeyFile, p.CaFile, getter.All(p.Settings))
+		// chartURL, err := repo.FindChartInAuthRepoURL(p.RepoURL, p.Username, p.Password, chartRef, p.Version, p.CertFile, p.KeyFile, p.CaFile, getter.All(p.Settings))
+		chartURL, err := repo.FindChartInAuthAndTLSAndPassRepoURL(p.RepoURL, p.Username, p.Password, chartRef, p.Version, p.CertFile, p.KeyFile, p.CaFile, p.PassCredentialsAll, getter.All(p.Settings))
 		if err != nil {
 			return out.String(), err
 		}

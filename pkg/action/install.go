@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -95,6 +96,8 @@ type ChartPathOptions struct {
 	Username string // --username
 	Verify   bool   // --verify
 	Version  string // --version
+
+	PassCredentialsAll bool // --pass-credentials
 }
 
 // NewInstall creates a new Install object with the given configuration.
@@ -215,8 +218,6 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 	// Mark this release as in-progress
 	rel.SetStatus(release.StatusPendingInstall, "Initial install underway")
 
-
-
 	// Bail out here if it is a dry run
 	if i.DryRun {
 		rel.Info.Description = "Dry run complete"
@@ -257,7 +258,6 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 		// return nil, errors.Wrap(err, "unable to build kubernetes objects from release manifest")
 		return i.failRelease(rel, fmt.Errorf("unable to build kubernetes objects from release manifest: %s", err))
 	}
-
 
 	// At this point, we can do the install. Note that before we were detecting whether to
 	// do an update, but it's not clear whether we WANT to do an update if the re-use is set
@@ -339,7 +339,7 @@ func (i *Install) availableName() error {
 	releaseutil.Reverse(h, releaseutil.SortByRevision)
 	rel := h[0]
 
-	if st := rel.Info.Status; i.Replace && (st == release.StatusUninstalled || st == release.StatusFailed || st == release.StatusSuperseded ) {
+	if st := rel.Info.Status; i.Replace && (st == release.StatusUninstalled || st == release.StatusFailed || st == release.StatusSuperseded) {
 		return nil
 	}
 	return errors.New("cannot re-use a name that is still in use")
@@ -625,7 +625,8 @@ func (c *ChartPathOptions) LocateChart(name string, settings *cli.EnvSettings) (
 		Keyring: c.Keyring,
 		Getters: getter.All(settings),
 		Options: []getter.Option{
-			getter.WithBasicAuth(c.Username, c.Password),
+			// getter.WithBasicAuth(c.Username, c.Password),
+			getter.WithPassCredentialsAll(c.PassCredentialsAll),
 		},
 		RepositoryConfig: settings.RepositoryConfig,
 		RepositoryCache:  settings.RepositoryCache,
@@ -634,12 +635,36 @@ func (c *ChartPathOptions) LocateChart(name string, settings *cli.EnvSettings) (
 		dl.Verify = downloader.VerifyAlways
 	}
 	if c.RepoURL != "" {
-		chartURL, err := repo.FindChartInAuthRepoURL(c.RepoURL, c.Username, c.Password, name, version,
-			c.CertFile, c.KeyFile, c.CaFile, getter.All(settings))
+		// chartURL, err := repo.FindChartInAuthRepoURL(c.RepoURL, c.Username, c.Password, name, version,
+		// 	c.CertFile, c.KeyFile, c.CaFile, getter.All(settings))
+		chartURL, err := repo.FindChartInAuthAndTLSAndPassRepoURL(c.RepoURL, c.Username, c.Password, name, version,
+			c.CertFile, c.KeyFile, c.CaFile, c.PassCredentialsAll, getter.All(settings))
 		if err != nil {
 			return "", err
 		}
 		name = chartURL
+
+		// Only pass the user/pass on when the user has said to or when the
+		// location of the chart repo and the chart are the same domain.
+		u1, err := url.Parse(c.RepoURL)
+		if err != nil {
+			return "", err
+		}
+		u2, err := url.Parse(chartURL)
+		if err != nil {
+			return "", err
+		}
+
+		// Host on URL (returned from url.Parse) contains the port if present.
+		// This check ensures credentials are not passed between different
+		// services on different ports.
+		if c.PassCredentialsAll || (u1.Scheme == u2.Scheme && u1.Host == u2.Host) {
+			dl.Options = append(dl.Options, getter.WithBasicAuth(c.Username, c.Password))
+		} else {
+			dl.Options = append(dl.Options, getter.WithBasicAuth("", ""))
+		}
+	} else {
+		dl.Options = append(dl.Options, getter.WithBasicAuth(c.Username, c.Password))
 	}
 
 	if err := os.MkdirAll(settings.RepositoryCache, 0755); err != nil {

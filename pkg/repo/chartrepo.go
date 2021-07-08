@@ -44,6 +44,8 @@ type Entry struct {
 	CertFile string `json:"certFile"`
 	KeyFile  string `json:"keyFile"`
 	CAFile   string `json:"caFile"`
+
+	PassCredentialsAll bool `json:"pass_credentials_all"`
 }
 
 // ChartRepository represents a chart repository
@@ -122,6 +124,7 @@ func (r *ChartRepository) DownloadIndexFile() (string, error) {
 		getter.WithURL(r.Config.URL),
 		getter.WithTLSClientConfig(r.Config.CertFile, r.Config.KeyFile, r.Config.CAFile),
 		getter.WithBasicAuth(r.Config.Username, r.Config.Password),
+		getter.WithPassCredentialsAll(r.Config.PassCredentialsAll),
 	)
 	if err != nil {
 		return "", err
@@ -189,7 +192,15 @@ func FindChartInRepoURL(repoURL, chartName, chartVersion, certFile, keyFile, caF
 // without adding repo to repositories, like FindChartInRepoURL,
 // but it also receives credentials for the chart repository.
 func FindChartInAuthRepoURL(repoURL, username, password, chartName, chartVersion, certFile, keyFile, caFile string, getters getter.Providers) (string, error) {
+	return FindChartInAuthAndTLSAndPassRepoURL(repoURL, username, password, chartName, chartVersion, certFile, keyFile, caFile, false, getters)
+}
 
+// FindChartInAuthAndTLSAndPassRepoURL finds chart in chart repository pointed by repoURL
+// without adding repo to repositories, like FindChartInRepoURL,
+// but it also receives credentials, TLS verify flag, and if credentials should
+// be passed on to other domains.
+// TODO Helm 4, FindChartInAuthAndTLSAndPassRepoURL should be integrated into FindChartInAuthRepoURL.
+func FindChartInAuthAndTLSAndPassRepoURL(repoURL, username, password, chartName, chartVersion, certFile, keyFile, caFile string, passCredentialsAll bool, getters getter.Providers) (string, error) {
 	// Download and write the index file to a temporary location
 	buf := make([]byte, 20)
 	rand.Read(buf)
@@ -203,6 +214,8 @@ func FindChartInAuthRepoURL(repoURL, username, password, chartName, chartVersion
 		KeyFile:  keyFile,
 		CAFile:   caFile,
 		Name:     name,
+
+		PassCredentialsAll: passCredentialsAll,
 	}
 	r, err := NewChartRepository(&c, getters)
 	if err != nil {
