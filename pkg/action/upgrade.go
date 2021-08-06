@@ -128,9 +128,9 @@ func (u *Upgrade) installCRDs(crds []chart.CRD) error {
 				u.cfg.Log("CRD %s is already present. Skipping.", crdName)
 				continue
 			}
-			u.cfg.Log("failed to install CRD %s, try to update it", obj.Name)
+			u.cfg.Log("failed to install CRD %s, try to update it. error %+v", obj.Name, err)
 			if _, err := u.cfg.KubeClient.Update(res, res, true); err != nil {
-				u.cfg.Log("failed to update CRD %s", obj.Name)
+				u.cfg.Log("failed to update CRD %s. error %+v", obj.Name, err)
 				continue
 			}
 		}
