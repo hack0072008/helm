@@ -124,7 +124,7 @@ func (c *Client) IsReachable() error {
 }
 
 // Create creates Kubernetes resources specified in the resource list.
-func (c *Client) Create(resources ResourceList) (*Result, error) {
+func (c *Client) Create(resources ResourceList, masquerade bool) (*Result, error) {
 	c.Log("creating %d resource(s)", len(resources))
 	if err := perform(resources, createResource); err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func (c *Client) Build(reader io.Reader, validate bool) (ResourceList, error) {
 // occurs, a Result will still be returned with the error, containing all
 // resource updates, creations, and deletions that were attempted. These can be
 // used for cleanup or other logging purposes.
-func (c *Client) Update(original, target ResourceList, force bool) (*Result, error) {
+func (c *Client) Update(original, target ResourceList, force bool, masquerade bool) (*Result, error) {
 	updateErrors := []string{}
 	res := &Result{}
 
