@@ -106,6 +106,8 @@ type Install struct {
 	PostRenderer   postrender.PostRenderer
 	// ForceAdopt will adopt resources that already exists
 	ForceAdopt bool
+	// Masquerade means that k8s resources are not actually deployed, a bit like Dryrun but not quite
+	Masquerade bool
 }
 
 // ChartPathOptions captures common options used for controlling chart paths
@@ -141,7 +143,7 @@ func (i *Install) installCRDs(crds []chart.CRD) error {
 		}
 
 		// Send them to Kube
-		if _, err := i.cfg.KubeClient.Create(res); err != nil {
+		if _, err := i.cfg.KubeClient.Create(res, false); err != nil {
 			// If the error is CRD already exists, continue.
 			if apierrors.IsAlreadyExists(err) {
 				crdName := res[0].Name
@@ -288,7 +290,7 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 		if err != nil {
 			return nil, err
 		}
-		if _, err := i.cfg.KubeClient.Create(resourceList); err != nil && !apierrors.IsAlreadyExists(err) {
+		if _, err := i.cfg.KubeClient.Create(resourceList, i.Masquerade); err != nil && !apierrors.IsAlreadyExists(err) {
 			return nil, err
 		}
 	}
@@ -349,11 +351,11 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 	// do an update, but it's not clear whether we WANT to do an update if the re-use is set
 	// to true, since that is basically an upgrade operation.
 	if len(toBeAdopted) == 0 && len(resources) > 0 {
-		if _, err := i.cfg.KubeClient.Create(resources); err != nil {
+		if _, err := i.cfg.KubeClient.Create(resources, i.Masquerade); err != nil {
 			return i.failRelease(rel, err)
 		}
 	} else if len(resources) > 0 {
-		if _, err := i.cfg.KubeClient.Update(toBeAdopted, resources, false); err != nil {
+		if _, err := i.cfg.KubeClient.Update(toBeAdopted, resources, false, i.Masquerade); err != nil {
 			return i.failRelease(rel, err)
 		}
 	}

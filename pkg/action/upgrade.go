@@ -101,6 +101,8 @@ type Upgrade struct {
 	DisableOpenAPIValidation bool
 	// ForceAdopt will adopt resources that already exists
 	ForceAdopt bool
+	// Masquerade means that k8s resources are not actually deployed, a bit like Dryrun but not quite
+	Masquerade bool
 }
 
 // NewUpgrade creates a new Upgrade object with the given configuration.
@@ -121,7 +123,7 @@ func (u *Upgrade) installCRDs(crds []chart.CRD) error {
 		}
 
 		// Send them to Kube
-		if _, err := u.cfg.KubeClient.Create(res); err != nil {
+		if _, err := u.cfg.KubeClient.Create(res, false); err != nil {
 			// If the error is CRD already exists, continue.
 			if apierrors.IsAlreadyExists(err) {
 				crdName := res[0].Name
@@ -129,7 +131,7 @@ func (u *Upgrade) installCRDs(crds []chart.CRD) error {
 				continue
 			}
 			u.cfg.Log("failed to install CRD %s, try to update it. error %+v", obj.Name, err)
-			if _, err := u.cfg.KubeClient.Update(res, res, true); err != nil {
+			if _, err := u.cfg.KubeClient.Update(res, res, true, false); err != nil {
 				u.cfg.Log("failed to update CRD %s. error %+v", obj.Name, err)
 				continue
 			}
@@ -387,7 +389,7 @@ func (u *Upgrade) performUpgrade(originalRelease, upgradedRelease *release.Relea
 		u.cfg.Log("upgrade hooks disabled for %s", upgradedRelease.Name)
 	}
 
-	results, err := u.cfg.KubeClient.Update(current, target, u.Force)
+	results, err := u.cfg.KubeClient.Update(current, target, u.Force, u.Masquerade)
 	if err != nil {
 		u.cfg.recordRelease(originalRelease)
 		return u.failRelease(upgradedRelease, results.Created, err)
